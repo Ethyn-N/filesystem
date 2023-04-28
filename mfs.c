@@ -45,6 +45,7 @@ struct inode
     int32_t blocks[MAX_BLOCKS_PER_FILE];
     short in_use;
     uint32_t file_size;
+    time_t date;
 
     // attribute variables
 	uint8_t hidden;
@@ -456,6 +457,7 @@ void init()
             inode_ptr[i].blocks[j] = -1;
             inode_ptr[i].in_use = 0;
             inode_ptr[i].file_size = 0;
+            inode_ptr[i].date = -1;
             inode_ptr[i].hidden = 0;
             inode_ptr[i].read_only = 0;
         }
@@ -473,6 +475,7 @@ int32_t findFreeBlock()
     {
         if (free_blocks[i])
         {
+            // free_blocks[i + 790] = 0;
             return i + 790; //790 1001
         }
     }
@@ -483,8 +486,9 @@ int32_t findFreeInode()
 {
     for (int i = 0; i < NUM_FILES; i++)
     {
-        if (free_inodes[i])
+        if (free_inodes[i] == 1)
         {
+            free_inodes[i] = 0;
             return i;
         }
     }
@@ -544,6 +548,7 @@ void createfs(char *filename)
             inode_ptr[i].blocks[j] = -1;
             inode_ptr[i].in_use = 0;
             inode_ptr[i].file_size = 0;
+            inode_ptr[i].date = 0;
             inode_ptr[i].hidden = 0;
             inode_ptr[i].read_only = 0;
         }
@@ -627,7 +632,12 @@ void list()
             char filename[65];
             memset(filename, 0, 65);
             strncpy(filename, directory_ptr[i].filename, strlen(directory_ptr[i].filename));
-            printf("%s\n", filename);
+            
+            int32_t inode_index = directory_ptr[i].inode;
+            char *date = ctime(&inode_ptr[inode_index].date);
+            trim(date);
+            
+            printf("%s %d %s\n", filename, inode_ptr[inode_index].file_size, date);
         }
     }
     
@@ -688,6 +698,8 @@ void insert(char *filename)
         return;
     }
 
+    directory_ptr[directory_entry].in_use = 1;
+
     // Open the input file read-only 
     FILE *ifp = fopen (filename, "r"); 
     printf("Reading %d bytes from %s\n", (int)buf.st_size, filename);
@@ -716,11 +728,17 @@ void insert(char *filename)
     }
 
     // Place the file info in the directory
-    directory_ptr[directory_entry].in_use = 1;
+    // directory_ptr[directory_entry].in_use = 1;
     directory_ptr[directory_entry].inode = inode_index;
     strncpy(directory_ptr[directory_entry].filename, filename, strlen(filename));
 
     inode_ptr[inode_index].file_size = buf.st_size;
+    inode_ptr[inode_index].in_use = 1;
+    inode_ptr[inode_index].date = time(NULL);
+    inode_ptr[inode_index].hidden = 0;
+    inode_ptr[inode_index].read_only = 0;
+
+    // time(&(inode_ptr[inode_index].date));
  
     // copy_size is initialized to the size of the input file so each loop iteration we
     // will copy BLOCK_SIZE bytes from the file then reduce our copy_size counter by
