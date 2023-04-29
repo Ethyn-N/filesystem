@@ -79,12 +79,14 @@ void init();
 int32_t findFreeBlock();
 int32_t findFreeInode();
 uint32_t df();
+uint32_t searchDirectory(char *filename);
 void createfs(char *filename);
 void savefs();
 void openfs(char *filename);
 void closefs();
-void list();
+void list(char *attrib1, char *attrib2);
 void insert(char *filename);
+void attrib(char *attribute, char *filename);
 
 int main() 
 {
@@ -102,7 +104,7 @@ int main()
         
     while (1) 
     {
-        // Print out the msh prompt
+        // Print out the mfs prompt
         printf ("mfs> ");
 
         // Read the command from the commandline.  The
@@ -257,7 +259,7 @@ int main()
         }
 
         // If "open" command is invoked.
-        else if (strcmp("open", token[0]) == 0 )
+        else if (strcmp("open", token[0]) == 0)
         {
             if (token[1] == NULL)
             {
@@ -269,25 +271,60 @@ int main()
         }
 
         // If "close" command is invoked.
-        else if (strcmp("close", token[0]) == 0 )
+        else if (strcmp("close", token[0]) == 0)
         {
             closefs();
         }
 
         // If "list" command is invoked.
-        else if (strcmp("list", token[0]) == 0 )
+        else if (strcmp("list", token[0]) == 0)
         {
             if(image_open == 0)
             {
                 printf("list: Disk image is not open.\n");
                 continue;
             }
-            
-            list();
+
+            if (token[1] != NULL && token[2] != NULL)
+            {
+                if (strcmp(token[1], "-h") == 0 || strcmp(token[1], "-a") == 0)
+                {
+                    if (strcmp(token[2], "-h") == 0 || strcmp(token[2], "-a") == 0)
+                    {
+                        list(token[1], token[2]);
+                    }
+                    else
+                    {
+                        printf("list: Invalid parameter.\n");
+                        continue;
+                    }
+                }
+                else
+                {
+                    printf("list: Invalid parameter.\n");
+                    continue;
+                }
+            }
+            else if (token[1] != NULL)
+            {
+                if (strcmp(token[1], "-h") == 0 || strcmp(token[1], "-a") == 0)
+                {
+                    list(token[1], token[2]);
+                }
+                else
+                {
+                    printf("list: Invalid parameter.\n");
+                    continue;
+                }
+            }
+            else
+            {
+                list(token[1], token[2]);
+            }
         }
 
         // If "df" command is invoked.
-        else if (strcmp("df", token[0]) == 0 )
+        else if (strcmp("df", token[0]) == 0)
         {
             if(image_open == 0)
             {
@@ -299,7 +336,7 @@ int main()
         }
 
         // If "insert" command is invoked.
-        else if (strcmp("insert", token[0]) == 0 )
+        else if (strcmp("insert", token[0]) == 0)
         {
             if(image_open == 0)
             {
@@ -314,6 +351,24 @@ int main()
             }
             
             insert(token[1]);
+        }
+
+        // If "attrib" command is invoked.
+        else if (strcmp("attrib", token[0]) == 0)
+        {
+            if (token[1] == NULL)
+            {
+                printf("attrib: No attribute specified.\n");
+                continue;
+            }
+
+            if (token[2] == NULL)
+            {
+                printf("attrib: No filename specified.\n");
+                continue;
+            }
+
+            attrib(token[1], token[2]);
         }
 
 
@@ -441,7 +496,7 @@ void init()
     inode_ptr = (struct inode *)&data_blocks[20][0];
     free_blocks = (uint8_t *)&data_blocks[277][0]; //277 1000
     free_inodes = (uint8_t *)&data_blocks[19][0];
-
+ 
     memset(image_name, 0, 64);
     image_open = 0;
 
@@ -522,6 +577,26 @@ uint32_t df()
     return count * BLOCK_SIZE;
 }
 
+// Search the directory for filename
+uint32_t searchDirectory(char *filename)
+{
+    int ret = -1;
+
+    for (int i = 0; i < NUM_FILES; i++) 
+	{
+		if(directory_ptr[i].filename == NULL)
+		{
+			continue;
+		}	
+        else if(strcmp(filename, directory_ptr[i].filename) == 0) 
+		{
+            return i;
+        }
+    }
+
+    return ret;	
+}	
+
 void createfs(char *filename)
 {
     if(strlen(filename) > 64)
@@ -548,7 +623,7 @@ void createfs(char *filename)
             inode_ptr[i].blocks[j] = -1;
             inode_ptr[i].in_use = 0;
             inode_ptr[i].file_size = 0;
-            inode_ptr[i].date = 0;
+            inode_ptr[i].date = -1;
             inode_ptr[i].hidden = 0;
             inode_ptr[i].read_only = 0;
         }
@@ -620,24 +695,94 @@ void closefs()
     memset(image_name, 0, 64);
 }
 
-void list()
+void list(char *attrib1, char *attrib2)
 {
     int not_found = 1;
 
     for (int i = 0; i < NUM_FILES; i++)
     {
+        int32_t inode_index = directory_ptr[i].inode;
+
         if (directory_ptr[i].in_use)
         {
-            not_found = 0;
-            char filename[65];
-            memset(filename, 0, 65);
-            strncpy(filename, directory_ptr[i].filename, strlen(directory_ptr[i].filename));
-            
-            int32_t inode_index = directory_ptr[i].inode;
-            char *date = ctime(&inode_ptr[inode_index].date);
-            trim(date);
-            
-            printf("%s %d %s\n", filename, inode_ptr[inode_index].file_size, date);
+            if (attrib1 == NULL && attrib2 == NULL)
+            {
+                if (inode_ptr[inode_index].hidden == 0)
+                {
+                    not_found = 0;
+                    char filename[65];
+                    memset(filename, 0, 65);
+                    strncpy(filename, directory_ptr[i].filename, strlen(directory_ptr[i].filename));
+
+                    char *date = ctime(&inode_ptr[inode_index].date);
+                    trim(date);
+                    
+                    printf("%d %s %s\n", inode_ptr[inode_index].file_size, date, filename);
+                }
+            }
+            else if (attrib1 != NULL && strcmp(attrib1, "-h") == 0)
+            {
+                if (attrib2 != NULL && strcmp(attrib2, "-a") == 0)
+                {
+                    not_found = 0;
+                    char filename[65];
+                    memset(filename, 0, 65);
+                    strncpy(filename, directory_ptr[i].filename, strlen(directory_ptr[i].filename));
+
+                    char *date = ctime(&inode_ptr[inode_index].date);
+                    trim(date);
+                    
+                    printf("%d %s %s %c %c\n", 
+                    inode_ptr[inode_index].file_size, date, filename,
+                    inode_ptr[inode_index].hidden, inode_ptr[inode_index].read_only);
+                }
+                else
+                {
+                    not_found = 0;
+                    char filename[65];
+                    memset(filename, 0, 65);
+                    strncpy(filename, directory_ptr[i].filename, strlen(directory_ptr[i].filename));
+
+                    char *date = ctime(&inode_ptr[inode_index].date);
+                    trim(date);
+                    
+                    printf("%d %s %s\n", inode_ptr[inode_index].file_size, date, filename);
+                }
+            }
+            else if (attrib1 != NULL && strcmp(attrib1, "-a") == 0)
+            {
+                if (attrib2 != NULL && strcmp(attrib2, "-h") == 0)
+                {
+                    not_found = 0;
+                    char filename[65];
+                    memset(filename, 0, 65);
+                    strncpy(filename, directory_ptr[i].filename, strlen(directory_ptr[i].filename));
+
+                    char *date = ctime(&inode_ptr[inode_index].date);
+                    trim(date);
+                    
+                    printf("%d %s %s %c %c\n", 
+                    inode_ptr[inode_index].file_size, date, filename,
+                    inode_ptr[inode_index].hidden, inode_ptr[inode_index].read_only);
+                }
+                else
+                {
+                    if (inode_ptr[inode_index].hidden == 0)
+                    {
+                        not_found = 0;
+                        char filename[65];
+                        memset(filename, 0, 65);
+                        strncpy(filename, directory_ptr[i].filename, strlen(directory_ptr[i].filename));
+
+                        char *date = ctime(&inode_ptr[inode_index].date);
+                        trim(date);
+                        
+                        printf("%d %s %s %c %c\n", 
+                        inode_ptr[inode_index].file_size, date, filename,
+                        inode_ptr[inode_index].hidden, inode_ptr[inode_index].read_only);
+                    }
+                }
+            }
         }
     }
     
@@ -795,3 +940,41 @@ void insert(char *filename)
     // We are done copying from the input file so close it out.
     fclose(ifp);
 }
+
+// Edits attributes for files in the system
+void attrib(char *attribute, char *filename)
+{
+    // Verify the filename isn't NULL.
+    if (filename == NULL)
+    {
+        printf("attrib: Filename is NULL\n");
+        return;
+    }
+
+	int directory_entry = searchDirectory(filename);
+	
+    if (directory_entry == -1)
+	{	
+		printf("attrib: File not found in directory.\n");
+	}
+	
+	int inode_index = directory_ptr[directory_entry].inode;
+	
+	if (strcmp(attribute, "+h") == 0)
+	{
+		inode_ptr[inode_index].hidden = 'h';
+	}	
+	else if (strcmp(attribute, "+r") == 0)
+	{
+		inode_ptr[inode_index].read_only = 'r';
+	}
+	else if (strcmp(attribute, "-h") == 0)
+	{
+		inode_ptr[inode_index].hidden = 0;
+	}
+	else if (strcmp(attribute, "-r") == 0)
+	{
+		inode_ptr[inode_index].read_only = 0;
+	}
+}
+
