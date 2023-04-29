@@ -22,6 +22,9 @@
 
 #define FIRST_DATA_BLOCK 790 //790 1001
 
+#define READONLY 0x01
+#define HIDDEN 0x02
+
 uint8_t data_blocks[NUM_BLOCKS][BLOCK_SIZE];
 
 // 512 blocks for free block map
@@ -46,10 +49,7 @@ struct inode
     short in_use;
     uint32_t file_size;
     time_t date;
-
-    // attribute variables
-	uint8_t hidden;
-	uint8_t read_only;
+    uint8_t attribute;
 };
 
 struct inode *inode_ptr;
@@ -513,8 +513,9 @@ void init()
             inode_ptr[i].in_use = 0;
             inode_ptr[i].file_size = 0;
             inode_ptr[i].date = -1;
-            inode_ptr[i].hidden = 0;
-            inode_ptr[i].read_only = 0;
+            inode_ptr[i].attribute = 0;
+            inode_ptr[i].attribute &= ~HIDDEN;
+            inode_ptr[i].attribute &= ~READONLY;
         }
 	}
 
@@ -624,8 +625,9 @@ void createfs(char *filename)
             inode_ptr[i].in_use = 0;
             inode_ptr[i].file_size = 0;
             inode_ptr[i].date = -1;
-            inode_ptr[i].hidden = 0;
-            inode_ptr[i].read_only = 0;
+            inode_ptr[i].attribute = 0;
+            inode_ptr[i].attribute &= ~HIDDEN;
+            inode_ptr[i].attribute &= ~READONLY;
         }
 	}
 
@@ -707,7 +709,7 @@ void list(char *attrib1, char *attrib2)
         {
             if (attrib1 == NULL && attrib2 == NULL)
             {
-                if (inode_ptr[inode_index].hidden == 0)
+                if (!(inode_ptr[inode_index].attribute & HIDDEN))
                 {
                     not_found = 0;
                     char filename[65];
@@ -732,9 +734,19 @@ void list(char *attrib1, char *attrib2)
                     char *date = ctime(&inode_ptr[inode_index].date);
                     trim(date);
                     
-                    printf("%d %s %s %c %c\n", 
-                    inode_ptr[inode_index].file_size, date, filename,
-                    inode_ptr[inode_index].hidden, inode_ptr[inode_index].read_only);
+                    printf("%d %s %s ", 
+                    inode_ptr[inode_index].file_size, date, filename);
+
+                    // Print the value of the attribute as an 8 bit binary value
+                    printf("%d%d%d%d%d%d%d%d\n",
+                    (inode_ptr[inode_index].attribute >> 7) & 0x01,
+                    (inode_ptr[inode_index].attribute >> 6) & 0x01,
+                    (inode_ptr[inode_index].attribute >> 5) & 0x01,
+                    (inode_ptr[inode_index].attribute >> 4) & 0x01,
+                    (inode_ptr[inode_index].attribute >> 3) & 0x01,
+                    (inode_ptr[inode_index].attribute >> 2) & 0x01,
+                    (inode_ptr[inode_index].attribute >> 1) & 0x01,
+                     inode_ptr[inode_index].attribute & 0x01);
                 }
                 else
                 {
@@ -761,13 +773,23 @@ void list(char *attrib1, char *attrib2)
                     char *date = ctime(&inode_ptr[inode_index].date);
                     trim(date);
                     
-                    printf("%d %s %s %c %c\n", 
-                    inode_ptr[inode_index].file_size, date, filename,
-                    inode_ptr[inode_index].hidden, inode_ptr[inode_index].read_only);
+                    printf("%d %s %s ", 
+                    inode_ptr[inode_index].file_size, date, filename);
+
+                    // Print the value of the attribute as an 8 bit binary value
+                    printf("%d%d%d%d%d%d%d%d\n",
+                    (inode_ptr[inode_index].attribute >> 7) & 0x01,
+                    (inode_ptr[inode_index].attribute >> 6) & 0x01,
+                    (inode_ptr[inode_index].attribute >> 5) & 0x01,
+                    (inode_ptr[inode_index].attribute >> 4) & 0x01,
+                    (inode_ptr[inode_index].attribute >> 3) & 0x01,
+                    (inode_ptr[inode_index].attribute >> 2) & 0x01,
+                    (inode_ptr[inode_index].attribute >> 1) & 0x01,
+                     inode_ptr[inode_index].attribute & 0x01);
                 }
                 else
                 {
-                    if (inode_ptr[inode_index].hidden == 0)
+                    if (!(inode_ptr[inode_index].attribute & HIDDEN))
                     {
                         not_found = 0;
                         char filename[65];
@@ -777,9 +799,19 @@ void list(char *attrib1, char *attrib2)
                         char *date = ctime(&inode_ptr[inode_index].date);
                         trim(date);
                         
-                        printf("%d %s %s %c %c\n", 
-                        inode_ptr[inode_index].file_size, date, filename,
-                        inode_ptr[inode_index].hidden, inode_ptr[inode_index].read_only);
+                        printf("%d %s %s ", 
+                        inode_ptr[inode_index].file_size, date, filename);
+
+                        // Print the value of the attribute as an 8 bit binary value
+                        printf("%d%d%d%d%d%d%d%d\n",
+                        (inode_ptr[inode_index].attribute >> 7) & 0x01,
+                        (inode_ptr[inode_index].attribute >> 6) & 0x01,
+                        (inode_ptr[inode_index].attribute >> 5) & 0x01,
+                        (inode_ptr[inode_index].attribute >> 4) & 0x01,
+                        (inode_ptr[inode_index].attribute >> 3) & 0x01,
+                        (inode_ptr[inode_index].attribute >> 2) & 0x01,
+                        (inode_ptr[inode_index].attribute >> 1) & 0x01,
+                        inode_ptr[inode_index].attribute & 0x01);
                     }
                 }
             }
@@ -843,8 +875,6 @@ void insert(char *filename)
         return;
     }
 
-    directory_ptr[directory_entry].in_use = 1;
-
     // Open the input file read-only 
     FILE *ifp = fopen (filename, "r"); 
     printf("Reading %d bytes from %s\n", (int)buf.st_size, filename);
@@ -873,17 +903,16 @@ void insert(char *filename)
     }
 
     // Place the file info in the directory
-    // directory_ptr[directory_entry].in_use = 1;
+    directory_ptr[directory_entry].in_use = 1;
     directory_ptr[directory_entry].inode = inode_index;
     strncpy(directory_ptr[directory_entry].filename, filename, strlen(filename));
 
+    // Place the file info in the inode
     inode_ptr[inode_index].file_size = buf.st_size;
     inode_ptr[inode_index].in_use = 1;
     inode_ptr[inode_index].date = time(NULL);
-    inode_ptr[inode_index].hidden = 0;
-    inode_ptr[inode_index].read_only = 0;
-
-    // time(&(inode_ptr[inode_index].date));
+    inode_ptr[inode_index].attribute &= ~HIDDEN;
+    inode_ptr[inode_index].attribute &= ~READONLY;
  
     // copy_size is initialized to the size of the input file so each loop iteration we
     // will copy BLOCK_SIZE bytes from the file then reduce our copy_size counter by
@@ -962,19 +991,64 @@ void attrib(char *attribute, char *filename)
 	
 	if (strcmp(attribute, "+h") == 0)
 	{
-		inode_ptr[inode_index].hidden = 'h';
+		inode_ptr[inode_index].attribute |= HIDDEN;
 	}	
 	else if (strcmp(attribute, "+r") == 0)
 	{
-		inode_ptr[inode_index].read_only = 'r';
+		inode_ptr[inode_index].attribute |= READONLY;
 	}
 	else if (strcmp(attribute, "-h") == 0)
 	{
-		inode_ptr[inode_index].hidden = 0;
+		inode_ptr[inode_index].attribute &= ~HIDDEN;
 	}
 	else if (strcmp(attribute, "-r") == 0)
 	{
-		inode_ptr[inode_index].read_only = 0;
+		inode_ptr[inode_index].attribute &= ~READONLY;
 	}
 }
+
+void delete(char *filename)
+{
+    // Verify the filename isn't NULL.
+    if (filename == NULL)
+    {
+        printf("delete: Filename is NULL\n");
+        return;
+    }
+
+	int directory_entry = searchDirectory(filename);
+
+	if (directory_entry == -1)
+	{	
+		printf("delete: File not found in directory.\n");	
+	}
+
+	int inode_index = directory_ptr[directory_entry].inode;
+	
+	if (inode_ptr[inode_index].attribute & READONLY)
+	{
+		printf("delete: The file is marked read-only and can not be deleted.\n");
+		return;
+	}	
+	
+	for (int i = 0; i < sizeof(inode_ptr[inode_index].blocks); i++)
+	{
+		free_blocks[i] = 1;
+	}
+
+    memset(directory_ptr[directory_entry].filename, 0, 64);
+    directory_ptr[directory_entry].in_use = 0;
+	directory_ptr[directory_entry].inode = -1;
+
+    for (int i = 0; i < NUM_BLOCKS; i++)
+    {
+        inode_ptr[inode_index].blocks[i] = -1;
+    }
+	
+    inode_ptr[inode_index].in_use = 0;
+    inode_ptr[inode_index].file_size = 0;
+    inode_ptr[inode_index].date = -1;
+    inode_ptr[inode_index].attribute &= ~HIDDEN;
+    inode_ptr[inode_index].attribute &= ~READONLY;
+}	
 
