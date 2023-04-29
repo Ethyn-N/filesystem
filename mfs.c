@@ -18,18 +18,15 @@
 #define MAX_BLOCKS_PER_FILE 1024
 #define MAX_FILE_SIZE 1048576
 #define NUM_FILES  256
-#define NUM_INODES 256
 
-#define FIRST_DATA_BLOCK 790 //790 1001
+#define FIRST_DATA_BLOCK 1001 //790 1001
 
 #define READONLY 0x01
 #define HIDDEN 0x02
 
 uint8_t data_blocks[NUM_BLOCKS][BLOCK_SIZE];
 
-// 512 blocks for free block map
 uint8_t *free_blocks;
-
 uint8_t *free_inodes;
 
 // directory
@@ -87,6 +84,8 @@ void closefs();
 void list(char *attrib1, char *attrib2);
 void insert(char *filename);
 void attrib(char *attribute, char *filename);
+void delete(char *filename);
+void undelete(char *filename);
 
 int main() 
 {
@@ -279,7 +278,7 @@ int main()
         // If "list" command is invoked.
         else if (strcmp("list", token[0]) == 0)
         {
-            if(image_open == 0)
+            if (image_open == 0)
             {
                 printf("list: Disk image is not open.\n");
                 continue;
@@ -326,7 +325,7 @@ int main()
         // If "df" command is invoked.
         else if (strcmp("df", token[0]) == 0)
         {
-            if(image_open == 0)
+            if (image_open == 0)
             {
                 printf("df: Disk image is not open.\n");
                 continue;
@@ -338,7 +337,7 @@ int main()
         // If "insert" command is invoked.
         else if (strcmp("insert", token[0]) == 0)
         {
-            if(image_open == 0)
+            if (image_open == 0)
             {
                 printf("insert: Disk image is not open.\n");
                 continue;
@@ -356,6 +355,12 @@ int main()
         // If "attrib" command is invoked.
         else if (strcmp("attrib", token[0]) == 0)
         {
+            if (image_open == 0)
+            {
+                printf("attrib: Disk image is not open.\n");
+                continue;
+            }
+
             if (token[1] == NULL)
             {
                 printf("attrib: No attribute specified.\n");
@@ -371,7 +376,41 @@ int main()
             attrib(token[1], token[2]);
         }
 
+        // If "delete" command is invoked.
+        else if (strcmp("delete", token[0]) == 0)
+        {
+            if (image_open == 0)
+            {
+                printf("delete: Disk image is not open.\n");
+                continue;
+            }
 
+            if (token[1] == NULL)
+            {
+                printf("delete: No filename specified.\n");
+                continue;
+            }
+
+            delete(token[1]);
+        }
+
+        // If "undelete" command is invoked.
+        else if (strcmp("undelete", token[0]) == 0)
+        {
+            if (image_open == 0)
+            {
+                printf("undelete: Disk image is not open.\n");
+                continue;
+            }
+
+            if (token[1] == NULL)
+            {
+                printf("undelete: No filename specified.\n");
+                continue;
+            }
+
+            undelete(token[1]);
+        }
 
         // Fork calls for UNIX commands.
         else
@@ -494,7 +533,7 @@ void init()
 {
     directory_ptr = (struct directoryEntry *)&data_blocks[0][0];
     inode_ptr = (struct inode *)&data_blocks[20][0];
-    free_blocks = (uint8_t *)&data_blocks[277][0]; //277 1000
+    free_blocks = (uint8_t *)&data_blocks[1000][0]; //277 1000
     free_inodes = (uint8_t *)&data_blocks[19][0];
  
     memset(image_name, 0, 64);
@@ -532,7 +571,7 @@ int32_t findFreeBlock()
         if (free_blocks[i])
         {
             // free_blocks[i + 790] = 0;
-            return i + 790; //790 1001
+            return i + 1001; //790 1001 1065
         }
     }
     return -1;
@@ -985,6 +1024,7 @@ void attrib(char *attribute, char *filename)
     if (directory_entry == -1)
 	{	
 		printf("attrib: File not found in directory.\n");
+        return;
 	}
 	
 	int inode_index = directory_ptr[directory_entry].inode;
@@ -1020,7 +1060,8 @@ void delete(char *filename)
 
 	if (directory_entry == -1)
 	{	
-		printf("delete: File not found in directory.\n");	
+		printf("delete: File not found in directory.\n");
+        return;
 	}
 
 	int inode_index = directory_ptr[directory_entry].inode;
@@ -1029,26 +1070,45 @@ void delete(char *filename)
 	{
 		printf("delete: The file is marked read-only and can not be deleted.\n");
 		return;
-	}	
-	
-	for (int i = 0; i < sizeof(inode_ptr[inode_index].blocks); i++)
-	{
-		free_blocks[i] = 1;
 	}
 
-    memset(directory_ptr[directory_entry].filename, 0, 64);
     directory_ptr[directory_entry].in_use = 0;
-	directory_ptr[directory_entry].inode = -1;
+	inode_ptr[inode_index].in_use = 0;
+    free_inodes[inode_index] = 1;
 
-    for (int i = 0; i < NUM_BLOCKS; i++)
+    for(int i = 0; i < MAX_BLOCKS_PER_FILE; i++) 
     {
-        inode_ptr[inode_index].blocks[i] = -1;
+        int block_index = inode_ptr[inode_index].blocks[i];
+        free_blocks[block_index] = 1;
     }
-	
-    inode_ptr[inode_index].in_use = 0;
-    inode_ptr[inode_index].file_size = 0;
-    inode_ptr[inode_index].date = -1;
-    inode_ptr[inode_index].attribute &= ~HIDDEN;
-    inode_ptr[inode_index].attribute &= ~READONLY;
-}	
+}
+
+void undelete(char *filename)
+{
+    // Verify the filename isn't NULL.
+    if (filename == NULL)
+    {
+        printf("undelete: Filename is NULL\n");
+        return;
+    }
+
+	int directory_entry = searchDirectory(filename);
+
+	if (directory_entry == -1)
+	{	
+		printf("undelete: File not found in directory.\n");	
+	}
+
+    int inode_index = directory_ptr[directory_entry].inode;
+
+    directory_ptr[directory_entry].in_use = 1;
+	inode_ptr[inode_index].in_use = 1;
+    free_inodes[inode_index] = 0;
+
+    for(int i = 0; i < MAX_BLOCKS_PER_FILE; i++) 
+    {
+        int block_index = inode_ptr[inode_index].blocks[i];
+        free_blocks[block_index] = 0;
+    }
+}
 
