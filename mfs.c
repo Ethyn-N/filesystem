@@ -86,6 +86,7 @@ void insert(char *filename);
 void attrib(char *attribute, char *filename);
 void delete(char *filename);
 void undelete(char *filename);
+void readFile(char *filename, int start, int num_bytes);
 
 int main() 
 {
@@ -410,6 +411,34 @@ int main()
             }
 
             undelete(token[1]);
+        }
+
+        // If "undelete" command is invoked.
+        else if (strcmp("read", token[0]) == 0)
+        {
+            if (image_open == 0)
+            {
+                printf("read: Disk image is not open.\n");
+                continue;
+            }
+
+            if (token[1] == NULL)
+            {
+                printf("read: No filename specified.\n");
+                continue;
+            }
+            else if (token[2] == NULL)
+            {
+                printf("read: No starting byte specified.\n");
+                continue;
+            }
+            else if (token[3] == NULL)
+            {
+                printf("read: No number of bytes specified.\n");
+                continue;
+            }
+
+            readFile(token[1], atoi(token[2]), atoi(token[3]));
         }
 
         // Fork calls for UNIX commands.
@@ -1110,5 +1139,39 @@ void undelete(char *filename)
         int block_index = inode_ptr[inode_index].blocks[i];
         free_blocks[block_index] = 0;
     }
+}
+
+void readFile(char *filename, int start, int num_bytes)
+{
+    int directory_entry = searchDirectory(filename);
+
+	if (directory_entry == -1)
+	{	
+		printf("read: File not found in directory.\n");
+        return;
+	}
+
+    FILE *fp = fopen(filename, "rb"); 
+    
+    if (fp == NULL) 
+    {
+        printf("read: Can not open file.\n");
+        return;
+    }
+
+    int num_read = 0;
+    uint8_t buffer[num_bytes];
+
+    fseek(fp, start, SEEK_CUR);
+    fread(buffer, num_bytes, 1, fp);
+
+    for(int i = 0; i < num_bytes; i++)
+    {
+        printf("%02x ", buffer[i]);
+    }
+
+    printf("\n");
+
+    fclose(fp);
 }
 
