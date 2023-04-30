@@ -1083,6 +1083,11 @@ void attrib(char *attribute, char *filename)
 		printf("attrib: File not found in directory.\n");
         return;
 	}
+    if (directory_ptr[directory_entry].in_use == 0)
+    {
+        printf("attrib: File not found in directory.\n");
+        return;
+    }
 	
 	int inode_index = directory_ptr[directory_entry].inode;
 	
@@ -1219,16 +1224,6 @@ void retrieve(char *filename, char *new_filename)
 		return;
 	}
 
-    // Verify the file exists.
-    struct stat buf;
-    int ret = stat(filename, &buf);
-
-    if (ret == -1)
-    {
-        printf("retrieve: File does not exist.\n");
-        return;
-    }
-
     // Verify file is in directory
     int directory_entry = searchDirectory(filename);
 	if (directory_entry == -1)
@@ -1241,7 +1236,7 @@ void retrieve(char *filename, char *new_filename)
         printf("retrieve: File not found in directory.\n");
         return;
     }
-
+    
     FILE *ofp;
 
     if (new_filename != NULL)
@@ -1263,10 +1258,11 @@ void retrieve(char *filename, char *new_filename)
     int inode_index = directory_ptr[directory_entry].inode;
 	int block_index = inode_ptr[inode_index].blocks[block_pos];
 
-    int copy_size = buf.st_size;
+    int copy_size = inode_ptr[inode_index].file_size;
     int offset = 0;
 
-    printf("Writing %d bytes to %s\n", (int)buf.st_size, filename);
+    printf("Writing %d bytes to %s\n", inode_ptr[inode_index].file_size, filename);
+    printf("Writing %d bytes to %s\n", inode_ptr[inode_index].file_size, filename);
 
     // Using copy_size as a count to determine when we've copied enough bytes to the output file.
     // Each time through the loop, except the last time, we will copy BLOCK_SIZE number of bytes from
@@ -1308,6 +1304,50 @@ void retrieve(char *filename, char *new_filename)
 
     // Close the output file, we're done. 
     fclose(ofp);
+}
+
+void encrypt(char *filename, char *cipher)
+{
+    // Verify the filename isn't NULL.
+    if (filename == NULL)
+    {
+        printf("encrypt: Filename is NULL\n");
+        return;
+    }
+
+    // Verify the file exists.
+    struct stat buf;
+    int ret = stat(filename, &buf);
+
+    if (ret == -1)
+    {
+        printf("encrypt: File does not exist.\n");
+        return;
+    }
+
+    // Verify file is in directory
+    int directory_entry = searchDirectory(filename);
+	if (directory_entry == -1)
+	{	
+		printf("encrypt: File not found in directory.\n");
+        return;
+	}
+    if (directory_ptr[directory_entry].in_use == 0)
+    {
+        printf("encrypt: File not found in directory.\n");
+        return;
+    }
+
+
+
+    char *s = filename;
+    size_t length = strlen(cipher), i = 0;
+    while (*s) 
+    {
+        *s++ ^= cipher[i++ % length];
+    }
+
+
 }
 
 
