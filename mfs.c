@@ -87,6 +87,7 @@ void attrib(char *attribute, char *filename);
 void delete(char *filename);
 void undelete(char *filename);
 void readFile(char *filename, int start, int num_bytes);
+void retrieve(char *filename, char *new_filename);
 
 int main() 
 {
@@ -129,7 +130,7 @@ int main()
             // Check if temp contains any non numeric values
             for (int i = 0; i < strlen(temp); i++)
             {
-                if(!isdigit(temp[i]))
+                if (!isdigit(temp[i]))
                 {
                     digit = 0;
                     break;
@@ -214,7 +215,7 @@ int main()
             history_index = updateHistory(history, history_index, command_string);
             pids_index = updatePids(pids, pids_index, -1);
 
-            for(int i = 0; i < history_index; i++)
+            for (int i = 0; i < history_index; i++)
             {
                 printf("%2d: %-12s\n", i, history[i]);
             }
@@ -234,7 +235,7 @@ int main()
                 continue;
             }
 
-            for(int i = 0; i < pids_index; i++)
+            for (int i = 0; i < pids_index; i++)
             {
                 printf("%2d: %-12s %d\n", i, history[i], pids[i]);
             }
@@ -413,7 +414,7 @@ int main()
             undelete(token[1]);
         }
 
-        // If "undelete" command is invoked.
+        // If "read" command is invoked.
         else if (strcmp("read", token[0]) == 0)
         {
             if (image_open == 0)
@@ -439,6 +440,24 @@ int main()
             }
 
             readFile(token[1], atoi(token[2]), atoi(token[3]));
+        }
+
+        // If "retrieve" command is invoked.
+        else if (strcmp("retrieve", token[0]) == 0)
+        {
+            if (image_open == 0)
+            {
+                printf("retrieve: Disk image is not open.\n");
+                continue;
+            }
+
+            if (token[1] == NULL)
+            {
+                printf("retrieve: No filename specified.\n");
+                continue;
+            }
+
+            retrieve(token[1], token[2]);
         }
 
         // Fork calls for UNIX commands.
@@ -568,7 +587,7 @@ void init()
     memset(image_name, 0, 64);
     image_open = 0;
 
-	for(int i = 0; i < NUM_FILES; i++)
+	for (int i = 0; i < NUM_FILES; i++)
 	{
         memset(directory_ptr[i].filename, 0, 64);
 		directory_ptr[i].in_use = 0;
@@ -587,7 +606,7 @@ void init()
         }
 	}
 
-    for(int i = 0; i < NUM_BLOCKS; i++)
+    for (int i = 0; i < NUM_BLOCKS; i++)
     {
         free_blocks[i] = 1;
     }
@@ -600,6 +619,7 @@ int32_t findFreeBlock()
         if (free_blocks[i])
         {
             // free_blocks[i + 790] = 0;
+            free_blocks[i] = 0;
             return i + 1001; //790 1001 1065
         }
     }
@@ -653,11 +673,11 @@ uint32_t searchDirectory(char *filename)
 
     for (int i = 0; i < NUM_FILES; i++) 
 	{
-		if(directory_ptr[i].filename == NULL)
+		if (directory_ptr[i].filename == NULL)
 		{
 			continue;
 		}	
-        else if(strcmp(filename, directory_ptr[i].filename) == 0) 
+        else if (strcmp(filename, directory_ptr[i].filename) == 0) 
 		{
             return i;
         }
@@ -668,7 +688,7 @@ uint32_t searchDirectory(char *filename)
 
 void createfs(char *filename)
 {
-    if(strlen(filename) > 64)
+    if (strlen(filename) > 64)
 	{
 		printf("createfs: Only supports filenames of up to 64 characters.\n");
 		return;
@@ -680,7 +700,7 @@ void createfs(char *filename)
     memset(data_blocks, 0, NUM_BLOCKS * BLOCK_SIZE);
     image_open = 1;
 
-    for(int i = 0; i < NUM_FILES; i++)
+    for (int i = 0; i < NUM_FILES; i++)
 	{
         memset(directory_ptr[i].filename, 0, 64);
 		directory_ptr[i].in_use = 0;
@@ -699,7 +719,7 @@ void createfs(char *filename)
         }
 	}
 
-    for(int i = 0; i < NUM_BLOCKS; i++)
+    for (int i = 0; i < NUM_BLOCKS; i++)
     {
         free_blocks[i] = 1;
     }
@@ -717,9 +737,10 @@ void savefs()
 
     disk_image = fopen(image_name, "w");
 
-	if(disk_image == NULL)
+	if (disk_image == NULL)
 	{
 		printf("savefs: Disk image filename not found.\n");
+        return;
 	}
 
 	fwrite(&data_blocks[0][0], BLOCK_SIZE, NUM_BLOCKS, disk_image);
@@ -733,7 +754,7 @@ void openfs(char *filename)
 {
     disk_image = fopen(filename, "r");
 
-    if(disk_image == NULL)
+    if (disk_image == NULL)
 	{
 		printf("open: Disk image filename not found.\n");
 		return;
@@ -753,7 +774,7 @@ void closefs()
         return;
     }
 
-    if(disk_image == NULL)
+    if (disk_image == NULL)
 	{
 		printf("close: Disk image filename not found.\n");
 		return;
@@ -900,6 +921,13 @@ void insert(char *filename)
         printf("insert: Filename is NULL\n");
         return;
     }
+
+    // Verify name isn't too long.
+    if (strlen(filename) > 64)
+	{
+		printf("insert: Only supports filenames of up to 64 characters.\n");
+		return;
+	}
 
     // Verify the file exists.
     struct stat buf;
@@ -1105,7 +1133,7 @@ void delete(char *filename)
 	inode_ptr[inode_index].in_use = 0;
     free_inodes[inode_index] = 1;
 
-    for(int i = 0; i < MAX_BLOCKS_PER_FILE; i++) 
+    for (int i = 0; i < MAX_BLOCKS_PER_FILE; i++) 
     {
         int block_index = inode_ptr[inode_index].blocks[i];
         free_blocks[block_index] = 1;
@@ -1125,7 +1153,8 @@ void undelete(char *filename)
 
 	if (directory_entry == -1)
 	{	
-		printf("undelete: File not found in directory.\n");	
+		printf("undelete: File not found in directory.\n");
+        return;
 	}
 
     int inode_index = directory_ptr[directory_entry].inode;
@@ -1134,7 +1163,7 @@ void undelete(char *filename)
 	inode_ptr[inode_index].in_use = 1;
     free_inodes[inode_index] = 0;
 
-    for(int i = 0; i < MAX_BLOCKS_PER_FILE; i++) 
+    for (int i = 0; i < MAX_BLOCKS_PER_FILE; i++) 
     {
         int block_index = inode_ptr[inode_index].blocks[i];
         free_blocks[block_index] = 0;
@@ -1165,7 +1194,7 @@ void readFile(char *filename, int start, int num_bytes)
     fseek(fp, start, SEEK_CUR);
     fread(buffer, num_bytes, 1, fp);
 
-    for(int i = 0; i < num_bytes; i++)
+    for (int i = 0; i < num_bytes; i++)
     {
         printf("%02x ", buffer[i]);
     }
@@ -1174,4 +1203,111 @@ void readFile(char *filename, int start, int num_bytes)
 
     fclose(fp);
 }
+
+void retrieve(char *filename, char *new_filename)
+{
+    // Verify the filename isn't NULL.
+    if (filename == NULL)
+    {
+        printf("retrieve: Filename is NULL\n");
+        return;
+    }
+
+    if (new_filename != NULL && strlen(new_filename) > 32)
+	{
+		printf("retrieve: Only supports filenames of up to 64 characters.\n");
+		return;
+	}
+
+    // Verify the file exists.
+    struct stat buf;
+    int ret = stat(filename, &buf);
+
+    if (ret == -1)
+    {
+        printf("retrieve: File does not exist.\n");
+        return;
+    }
+
+    // Verify file is in directory
+    int directory_entry = searchDirectory(filename);
+	if (directory_entry == -1)
+	{	
+		printf("retrieve: File not found in directory.\n");
+        return;
+	}
+    if (directory_ptr[directory_entry].in_use == 0)
+    {
+        printf("retrieve: File not found in directory.\n");
+        return;
+    }
+
+    FILE *ofp;
+
+    if (new_filename != NULL)
+    {
+        ofp = fopen(new_filename, "w");
+    }
+    else
+    {
+        ofp = fopen(filename, "w");
+    }
+
+    if (ofp == NULL)
+    {
+      printf("retrieve: Could not open output file: %s\n", filename);
+      return;
+    }
+
+    int block_pos = 0;
+    int inode_index = directory_ptr[directory_entry].inode;
+	int block_index = inode_ptr[inode_index].blocks[block_pos];
+
+    int copy_size = buf.st_size;
+    int offset = 0;
+
+    printf("Writing %d bytes to %s\n", (int)buf.st_size, filename);
+
+    // Using copy_size as a count to determine when we've copied enough bytes to the output file.
+    // Each time through the loop, except the last time, we will copy BLOCK_SIZE number of bytes from
+    // our stored data to the file fp, then we will increment the offset into the file we are writing to.
+    // On the last iteration of the loop, instead of copying BLOCK_SIZE number of bytes we just copy
+    // how ever much is remaining ( copy_size % BLOCK_SIZE ).  If we just copied BLOCK_SIZE on the
+    // last iteration we'd end up with gibberish at the end of our file. 
+    while (copy_size > 0)
+    { 
+
+      int num_bytes;
+
+      // If the remaining number of bytes we need to copy is less than BLOCK_SIZE then
+      // only copy the amount that remains. If we copied BLOCK_SIZE number of bytes we'd
+      // end up with garbage at the end of the file.
+      if (copy_size < BLOCK_SIZE)
+      {
+        num_bytes = copy_size;
+      }
+      else 
+      {
+        num_bytes = BLOCK_SIZE;
+      }
+
+      // Write num_bytes number of bytes from our data array into our output file.
+      fwrite(data_blocks[block_index], num_bytes, 1, ofp); 
+
+      // Reduce the amount of bytes remaining to copy, increase the offset into the file
+      // and increment the block_pos to move us to the next data block.
+      copy_size -= BLOCK_SIZE;
+      offset += BLOCK_SIZE;
+      block_pos++;
+      block_index = inode_ptr[inode_index].blocks[block_pos];	     
+
+      // Since we've copied from the point pointed to by our current file pointer, increment
+      // offset number of bytes so we will be ready to copy to the next area of our output file.
+      fseek(ofp, offset, SEEK_SET);
+    }
+
+    // Close the output file, we're done. 
+    fclose(ofp);
+}
+
 
