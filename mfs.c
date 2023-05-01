@@ -89,8 +89,9 @@ void undelete(char *filename);
 void readFile(char *filename, int start, int num_bytes);
 void retrieve(char *filename, char *new_filename);
 void readFileRetrieve(char *filename, int directory_entry);
-void encrypt(char *filename, char *cipher);
-void decrypt(char *filename, char *cipher);
+void encrypt(char *filename, char cipher);
+void decrypt(char *filename, char cipher);
+uint8_t hex_to_byte(char *hex);
 
 int main() 
 {
@@ -484,7 +485,15 @@ int main()
                 continue;
             }
 
-            encrypt(token[1], token[2]);
+            uint8_t hex = hex_to_byte(token[2]);
+
+            if (hex == -1)
+            {
+                printf("encrypt: Invalid cipher.\n");
+                continue;
+            }
+
+            encrypt(token[1], hex);
         }
 
         // If "decrypt" command is invoked.
@@ -507,8 +516,16 @@ int main()
                 printf("decrypt: No cipher specified.\n");
                 continue;
             }
+            
+            uint8_t hex = hex_to_byte(token[2]);
 
-            decrypt(token[1], token[2]);
+            if (hex == -1)
+            {
+                printf("decrypt: Invalid cipher.\n");
+                continue;
+            }
+
+            decrypt(token[1], hex);
         }
 
         // Fork calls for UNIX commands.
@@ -1582,8 +1599,17 @@ void readFileRetrieve(char *filename, int directory_entry)
     fclose(ofp);
 }
 
-void encrypt(char *filename, char *cipher)
+// The encrypt command.
+void encrypt(char *filename, char cipher)
 {
+    // Input: char *filename - The file we want to encrypt.
+    //        char *cipher - The cipher used to encrypt the file.
+    // Output: void. Encrypts the file using the given cipher.
+    // Description: The data from the file in the the file system is put
+    //              into the cwd. The file in the cwd is used to read the
+    //              bytes of the file we want to encrypt. Each byte in
+    //              the file is encrypted using the XOR cipher. 
+
     // Verify the filename isn't NULL.
     if (filename == NULL)
     {
@@ -1620,19 +1646,17 @@ void encrypt(char *filename, char *cipher)
         return;
     }
 
-    int block_size = strlen(cipher);
-	unsigned char block[block_size];
+    unsigned char block[1];
     int num_bytes;
 
     do {
-		num_bytes = fread(block, 1, block_size, fpi);
+		num_bytes = fread(block, 1, 1, fpi);
 
-		// XOR byte by byte
 		for (int i = 0; i < num_bytes; i++) 
-			block[i] ^= cipher[i];
+			block[i] ^= cipher;
 
 		fwrite(block, 1, num_bytes, fpo);
-	} while (num_bytes == block_size);
+	} while (num_bytes == 1);
 
     fclose(fpi);
     fclose(fpo);
@@ -1643,8 +1667,17 @@ void encrypt(char *filename, char *cipher)
     remove("temp");
 }
 
-void decrypt(char *filename, char *cipher)
+// The decrypt command.
+void decrypt(char *filename, char cipher)
 {
+    // Input: char *filename - The file we want to decrypt.
+    //        char *cipher - The cipher used to decrypt the file.
+    // Output: void. Decrypts the file using the given cipher.
+    // Description: The data from the file in the the file system is put
+    //              into the cwd. The file in the cwd is used to read the
+    //              bytes of the file we want to decrypt. Each byte in
+    //              the file is decrypted using the XOR cipher. 
+
     // Verify the filename isn't NULL.
     if (filename == NULL)
     {
@@ -1681,19 +1714,17 @@ void decrypt(char *filename, char *cipher)
         return;
     }
 
-    int block_size = strlen(cipher);
-	unsigned char block[block_size];
+	unsigned char block[1];
     int num_bytes;
 
     do {
-		num_bytes = fread(block, 1, block_size, fpi);
+		num_bytes = fread(block, 1, 1, fpi);
 
-		// XOR byte by byte
 		for (int i = 0; i < num_bytes; i++) 
-			block[i] ^= cipher[i];
+			block[i] ^= cipher;
 
 		fwrite(block, 1, num_bytes, fpo);
-	} while (num_bytes == block_size);
+	} while (num_bytes == 1);
 
     fclose(fpi);
     fclose(fpo);
@@ -1702,4 +1733,28 @@ void decrypt(char *filename, char *cipher)
     insert(filename);
 
     remove("temp");
+}
+
+// Used to convert the hex value cipher given into a single decimal byte.
+uint8_t hex_to_byte(char *hex) 
+{
+    // Input: char *hex - Hex value cipher.
+    // Output: uint8_t. Returns the converted hex value cipher as a byte.
+    // Description: strtol converts the hexadecimal string to a byte value.
+    //              Value is checked to see if it is a byte value.
+    //              Value is returned as an uint8_t.
+
+    char* end_ptr;
+    int value = strtol(hex, &end_ptr, 16);
+    if (*end_ptr != '\0')
+    {
+        return -1;
+    }
+
+    if (value < 0 || value > 255)
+    {
+        return -1;
+    }
+
+    return (uint8_t)value;
 }
