@@ -89,6 +89,8 @@ void undelete(char *filename);
 void readFile(char *filename, int start, int num_bytes);
 void retrieve(char *filename, char *new_filename);
 void readFileRetrieve(char *filename, int directory_entry);
+void encrypt(char *filename, char *cipher);
+void decrypt(char *filename, char *cipher);
 
 int main() 
 {
@@ -578,8 +580,12 @@ void trim(char *str)
     }
 }
 
+// Initializes values.
 void init()
 {
+    // Input: None
+    // Output: Void. Initializes values related to file system.
+    // Description: Zeros out data of file system related values.
     directory_ptr = (struct directoryEntry *)&data_blocks[0][0];
     inode_ptr = (struct inode *)&data_blocks[20][0];
     free_blocks = (uint8_t *)&data_blocks[1000][0]; //277 1000
@@ -613,8 +619,15 @@ void init()
     }
 }
 
+// Finds free block in free_blocks[] array.
 int32_t findFreeBlock()
 {
+    // Input: None
+    // Output: int32_t. Returns free block.
+    // Description: Loops through free_blocks[] up till NUM_BLOCKS. If a free block is found,
+    //              index of block plus 1001 is returnd and that block is marked not free.
+    //              Returns -1 if no free blocks are found.
+
     for (int i = 0; i < NUM_BLOCKS; i++)
     {
         if (free_blocks[i])
@@ -627,8 +640,15 @@ int32_t findFreeBlock()
     return -1;
 }
 
+// Finds free inode in free_inodes[] array
 int32_t findFreeInode()
 {
+    // Input: None
+    // Output: int32_t. Returns free inode.
+    // Description: Loops through free_inodes[] up till NUM_FILESS. If a free inode is found,
+    //              index of free inode is returnd and that inode is marked not free.
+    //              Returns -1 if no free inodes are found.
+
     for (int i = 0; i < NUM_FILES; i++)
     {
         if (free_inodes[i] == 1)
@@ -639,9 +659,16 @@ int32_t findFreeInode()
     }
     return -1;
 }
-
+// Finds free inode block in inode_ptr[inode].blocks[] array
 int32_t findFreeInodeBlock(int32_t inode)
 {
+    // Input: int32_t inode - directory[directory_entry].inode
+    // Output: int32_t. Returns free inode block.
+    // Description: Loops through inode_ptr[inode].blocks[] up till MAX_BLOCKS_PER_FILE.
+    //              If a free inode block is found,
+    //              index of inode block is returned.
+    //              Returns -1 if no free inode blocks are found.
+
     for (int i = 0; i < MAX_BLOCKS_PER_FILE; i++)
     {
         if (inode_ptr[inode].blocks[i] == -1)
@@ -652,8 +679,16 @@ int32_t findFreeInodeBlock(int32_t inode)
     return -1;
 }
 
+// The df command.
 uint32_t df()
 {
+    // Input: None.
+    // Output: uint32_t. Returns the amount of free space in the file system in bytes.
+    // Description: Loops through free_blocks[] starting at FIRST_DATA_BLOCK 
+    //              and ends at NUM_BLOCKS. int count is increased for every
+    //              free block found.
+    //              Returns count * BLOCK_SIZE.
+
     int count = 0;
     
     for (int i = FIRST_DATA_BLOCK; i < NUM_BLOCKS; i++)
@@ -667,9 +702,17 @@ uint32_t df()
     return count * BLOCK_SIZE;
 }
 
-// Search the directory for filename
+// Searches the directory for filename
 uint32_t searchDirectory(char *filename)
 {
+    // Input: char *filename - the filename to look for.
+    // Output: uint32_t. Returns the index of the filename in directory_ptr[] if found.
+    //         Returns -1 if filename is not found in directory.
+    // Description: Loops through directory_ptr[] starting at 0 
+    //              and ends at NUM_FILES. If filename == directory_ptr[i].filename,
+    //              index of filename is returned.
+    //              Returns -1 if filename is not found in directory.
+
     int ret = -1;
 
     for (int i = 0; i < NUM_FILES; i++) 
@@ -687,8 +730,13 @@ uint32_t searchDirectory(char *filename)
     return ret;	
 }	
 
+// The createfs command.
 void createfs(char *filename)
 {
+    // Input: char *filename - the name of the file system.
+    // Output: void. Creates the file system.
+    // Description: Initializes the file system in the disk_image.
+
     if (strlen(filename) > 64)
 	{
 		printf("createfs: Only supports filenames of up to 64 characters.\n");
@@ -728,8 +776,14 @@ void createfs(char *filename)
     fclose(disk_image);
 }
 
+// The savefs command.
 void savefs()
 {
+    // Input: None.
+    // Output: void. Saves the file system.
+    // Description: If image is open and not NULL, the data_blocks are
+    //              written to the disK_image.
+
     if (image_open == 0)
     {
         printf("savefs: Disk image is not open.\n");
@@ -751,8 +805,15 @@ void savefs()
 	fclose(disk_image);	
 }
 
+// The openfs command.
 void openfs(char *filename)
 {
+    // Input: char *filename - name of the file system to open.
+    // Output: void. Opens the file system.
+    // Description: If image is not open and not NULL, image_name is copied from
+    //              filename and the disk_image reads the data from data_blocks.
+    //              Image is set to open.
+
     disk_image = fopen(filename, "r");
 
     if (disk_image == NULL)
@@ -773,8 +834,14 @@ void openfs(char *filename)
     image_open = 1;
 }
 
+// The closefs command.
 void closefs()
 {
+    // Input: None.
+    // Output: void. Closes the file system.
+    // Description: If image is open and not NULL, disk_image is closed,
+    //              image is set to closed, and image_name is zeroed out.
+
     if (image_open == 0)
     {
         printf("close: Disk image is not open.\n");
@@ -793,8 +860,17 @@ void closefs()
     memset(image_name, 0, 64);
 }
 
+// The list command.
 void list(char *attrib1, char *attrib2)
 {
+    // Input: char *attrib1 - First attribute.
+    //        char *attrib2 - Second attribute.
+    // Output: void. Lists the file system.
+    // Description: Loops through the files within the file system.
+    //              If an attribute is '-h', hidden files are displayed.
+    //              If an attribute is '-a', attributes are displayed
+    //              as an 8 bit value.
+
     int not_found = 1;
 
     for (int i = 0; i < NUM_FILES; i++)
@@ -920,8 +996,15 @@ void list(char *attrib1, char *attrib2)
     }
 }
 
+// The insert command.
 void insert(char *filename)
 {
+    // Input: char *filename - The file to put into the file system.
+    // Output: void. Inserts filename into the file system.
+    // Description: After checking if the file exists, the input read-only
+    //              file is open. Data is copied and stored into 
+    //              the file system in BLOCK_SIZE chunks
+
     // Verify the filename isn't NULL.
     if (filename == NULL)
     {
@@ -1073,9 +1156,16 @@ void insert(char *filename)
     fclose(ifp);
 }
 
-// Edits attributes for files in the system
+// The attrib command.
 void attrib(char *attribute, char *filename)
 {
+    // Input: char *attribute - the attribute we want to add/subtract.
+    //        char *filename - The file we want to edit.
+    // Output: void. Sets or removes an attribute from the file.
+    // Description: After checking if the file exists in the directory, 
+    //              if-else statements set/remove the attribute bit
+    //              in the file.
+
     // Verify the filename isn't NULL.
     if (filename == NULL)
     {
@@ -1116,8 +1206,15 @@ void attrib(char *attribute, char *filename)
 	}
 }
 
+// The delete command.
 void delete(char *filename)
 {
+    // Input: char *filename - The file we want to delete.
+    // Output: void. deletes a file from the file system.
+    // Description: After checking if the file exists in the directory, 
+    //              directory_entry, inode_index, and blocks
+    //              associated with the inode are set to free.
+
     // Verify the filename isn't NULL.
     if (filename == NULL)
     {
@@ -1152,8 +1249,15 @@ void delete(char *filename)
     }
 }
 
+// The undelete command.
 void undelete(char *filename)
 {
+    // Input: char *filename - The file we want to undelete.
+    // Output: void. undeletes a file from the file system.
+    // Description: After checking if the file exists in the directory, 
+    //              directory_entry, inode_index, and blocks
+    //              associated with the inode are set to in use.
+
     // Verify the filename isn't NULL.
     if (filename == NULL)
     {
@@ -1182,8 +1286,19 @@ void undelete(char *filename)
     }
 }
 
+// The read command.
 void readFile(char *filename, int start, int num_bytes)
 {
+    // Input: char *filename - The file we want to read.
+    //        int start - the bytes we want to start reading the file at.
+    //        int num_bytes - the number of bytes we want to read.
+    // Output: void. reads a file from the file system and prints its
+    //         hexadecimal values.
+    // Description: After checking if the file exists in the directory, 
+    //              fseek is used to go to the start pos.
+    //              fread reads the number of bytes and is stored in buffer[num_bytes];
+    //              for loop prints what's stored in buffer as hexadecimal values.
+    
     // Verify file is in directory
     int directory_entry = searchDirectory(filename);
 	if (directory_entry == -1)
@@ -1199,7 +1314,7 @@ void readFile(char *filename, int start, int num_bytes)
 
     readFileRetrieve(filename, directory_entry);
 
-    FILE *fp = fopen(filename, "rb+");
+    FILE *fp = fopen("temp", "rb");
     
     if (fp == NULL) 
     { 
@@ -1209,7 +1324,7 @@ void readFile(char *filename, int start, int num_bytes)
 
     uint8_t buffer[num_bytes];
 
-    fseek(fp, start, SEEK_CUR);
+    fseek(fp, start + 1, SEEK_CUR);
     fread(buffer, num_bytes, 1, fp);
 
     for (int i = 0; i < num_bytes; i++)
@@ -1217,13 +1332,23 @@ void readFile(char *filename, int start, int num_bytes)
         printf("%02x ", buffer[i]);
     }
 
-    remove(filename);
+    fclose(fp);
+    remove("temp");
 
     printf("\n");
 }
 
+// The retrieve command.
 void retrieve(char *filename, char *new_filename)
 {
+    // Input: char *filename - The file we want to retrieve.
+    //        char *new_filename - Optional name for the retrieved file.
+    // Output: void. retrieve a file from the file system and place it 
+    //               in the current working directory.
+    // Description: After checking if the file exists in the directory, 
+    //              output file is opened. Using copy_size as a count to determine 
+    //              when we've copied enough bytes to the output file.
+
     // Verify the filename isn't NULL.
     if (filename == NULL)
     {
@@ -1311,8 +1436,16 @@ void retrieve(char *filename, char *new_filename)
     fclose(ofp);
 }
 
+// Useful for reading a file in the file system.
 void readFileRetrieve(char *filename, int directory_entry)
 {
+    // Input: char *filename - The file we want to retrieve.
+    //        int directory_entry - The index for the file in the directory.
+    // Output: void. Creates a file for read() to read from.
+    // Description: The data from the file in the the file system is put
+    //              into the cwd. The file in the cwd is used to read the
+    //              bytes of the file we want to read.
+
     // Verify the filename isn't NULL.
     if (filename == NULL)
     {
@@ -1322,7 +1455,7 @@ void readFileRetrieve(char *filename, int directory_entry)
 
     FILE *ofp;
 
-    ofp = fopen(filename, "w");
+    ofp = fopen("temp", "w");
 
     if (ofp == NULL)
     {
@@ -1349,7 +1482,7 @@ void readFileRetrieve(char *filename, int directory_entry)
         {
             num_bytes = BLOCK_SIZE;
         }
-        
+
         fwrite(data_blocks[block_index], num_bytes, 1, ofp); 
 
         copy_size -= BLOCK_SIZE;
@@ -1363,70 +1496,3 @@ void readFileRetrieve(char *filename, int directory_entry)
     // Close the output file, we're done. 
     fclose(ofp);
 }
-
-void encrypt(char *filename, char *cipher)
-{
-    // Verify the filename isn't NULL.
-    if (filename == NULL)
-    {
-        printf("encrypt: Filename is NULL\n");
-        return;
-    }
-
-    // Verify file is in directory
-    int directory_entry = searchDirectory(filename);
-	if (directory_entry == -1)
-	{	
-		printf("encrypt: File not found in directory.\n");
-        return;
-	}
-    if (directory_ptr[directory_entry].in_use == 0)
-    {
-        printf("encrypt: File not found in directory.\n");
-        return;
-    }
-
-    int block_pos = 0;
-    int inode_index = directory_ptr[directory_entry].inode;
-	int block_index = inode_ptr[inode_index].blocks[block_pos];
-
-    int file_size = inode_ptr[inode_index].file_size;
-    int offset = 0;
-
-    while (file_size > 0)
-    {
-        int num_bytes;
-
-        if (file_size < BLOCK_SIZE)
-        {
-            num_bytes = file_size;
-        }
-        else 
-        {
-            num_bytes = BLOCK_SIZE;
-        }
-
-        // Write num_bytes number of bytes from our data array into our output file.
-        // fwrite(data_blocks[block_index], num_bytes, 1, ofp); 
-
-        file_size -= BLOCK_SIZE;
-        offset += BLOCK_SIZE;
-        block_pos++;
-        block_index = inode_ptr[inode_index].blocks[block_pos];	     
-
-         //fseek(ofp, offset, SEEK_SET);
-    }
-
-
-
-    char *s = filename;
-    size_t length = strlen(cipher), i = 0;
-    while (*s) 
-    {
-        *s++ ^= cipher[i++ % length];
-    }
-
-
-}
-
-
