@@ -83,6 +83,7 @@ void openfs(char *filename);
 void closefs();
 void list(char *attrib1, char *attrib2);
 void insert(char *filename);
+void XOR_insert(char *filename);
 void attrib(char *attribute, char *filename);
 void delete(char *filename);
 void undelete(char *filename);
@@ -1198,16 +1199,6 @@ void insert(char *filename)
         // data array. 
 
         // Find a free block.
-
-        // if (rewrite == 1)
-        // {
-        //     block_index = inode_ptr[inode_index].blocks[i++];
-        // }
-        // else
-        // {
-        //     block_index = findFreeBlock();
-        // }
-
         block_index = findFreeBlock();
 
         if (block_index == -1)
@@ -1229,6 +1220,163 @@ void insert(char *filename)
         {
             inode_block = findFreeInodeBlock(inode_index);
         }
+        
+        inode_ptr[inode_index].blocks[inode_block] = block_index;
+
+        // If bytes == 0 and we haven't reached the end of the file then something is 
+        // wrong. If 0 is returned and we also have the EOF flag set then that is OK.
+        // It means we've reached the end of our input file.
+        if (bytes == 0 && !feof(ifp))
+        {
+            printf("An error occured reading from the input file.\n");
+            return;
+        }
+
+        // Clear the EOF file flag.
+        clearerr(ifp);
+
+        // Reduce copy_size by the BLOCK_SIZE bytes.
+        copy_size -= BLOCK_SIZE;
+        
+        // Increase the offset into our input file by BLOCK_SIZE.  This will allow
+        // the fseek at the top of the loop to position us to the correct spot.
+        offset += BLOCK_SIZE;
+
+        // block_index = findFreeBlock();
+    }
+
+    // We are done copying from the input file so close it out.
+    fclose(ifp);
+}
+
+// Used for encryption/decryption.
+void XOR_insert(char *filename)
+{
+    // Input: char *filename - The file to put into the file system.
+    // Output: void. Inserts filename into the file system.
+    // Description: After checking if the file exists, the input read-only
+    //              file is open. Data is copied and stored into 
+    //              the file system in BLOCK_SIZE chunks
+
+    // Verify the filename isn't NULL.
+    if (filename == NULL)
+    {
+        printf("insert: Filename is NULL\n");
+        return;
+    }
+
+    // Verify name isn't too long.
+    if (strlen(filename) > 64)
+	{
+		printf("insert: Only supports filenames of up to 64 characters.\n");
+		return;
+	}
+
+    // Verify the file exists.
+    struct stat buf;
+    int ret = stat(filename, &buf);
+
+    if (ret == -1)
+    {
+        printf("insert: File does not exist.\n");
+        return;
+    }
+
+    // Verify the file isn't too big.
+    if (buf.st_size > MAX_FILE_SIZE)
+    {
+        printf("insert: File is too large.\n");
+        return;
+    }
+
+    // Verify that there is enough disk space.
+    if (buf.st_size > df())
+    {
+        printf("insert: Not enough free disk space.\n");
+        return;
+    }
+
+    // Find an empty directory entry
+    int directory_entry = searchDirectory(filename);
+    
+    if (directory_entry == -1)
+    {
+        printf("insert: Could not find a free directory entry.\n");
+        return;
+    }
+
+    // Open the input file read-only 
+    FILE *ifp = fopen (filename, "r"); 
+ 
+    // Save off the size of the input file since we'll use it in a couple of places and 
+    // also initialize our index variables to zero. 
+    int32_t copy_size = buf.st_size;
+
+    // We want to copy and write in chunks of BLOCK_SIZE. So to do this 
+    // we are going to use fseek to move along our file stream in chunks of BLOCK_SIZE.
+    // We will copy bytes, increment our file pointer by BLOCK_SIZE and repeat.
+    int32_t offset = 0;               
+
+    // We are going to copy and store our file in BLOCK_SIZE chunks instead of one big 
+    // memory pool. Why? We are simulating the way the file system stores file data in
+    // blocks of space on the disk. block_index will keep us pointing to the area of
+    // the area that we will read from or write to.
+    int32_t block_index = -1;
+
+    // Find a free inode.
+    int32_t inode_index = -1;
+
+    
+    inode_index = directory_ptr[directory_entry].inode;
+    
+    if (inode_index == -1)
+    {
+        printf("insert: Can not find a free inode.\n");
+        return;
+    }
+
+    // Place the file info in the directory
+    directory_ptr[directory_entry].in_use = 1;
+    directory_ptr[directory_entry].inode = inode_index;
+    strncpy(directory_ptr[directory_entry].filename, filename, strlen(filename));
+
+    // Place the file info in the inode
+    inode_ptr[inode_index].file_size = buf.st_size;
+    inode_ptr[inode_index].in_use = 1;
+    
+    int i = 0;
+ 
+    // copy_size is initialized to the size of the input file so each loop iteration we
+    // will copy BLOCK_SIZE bytes from the file then reduce our copy_size counter by
+    // BLOCK_SIZE number of bytes. When copy_size is less than or equal to zero we know
+    // we have copied all the data from the input file.
+    while (copy_size > 0)
+    {
+        // Index into the input file by offset number of bytes.  Initially offset is set to
+        // zero so we copy BLOCK_SIZE number of bytes from the front of the file.  We 
+        // then increase the offset by BLOCK_SIZE and continue the process.  This will
+        // make us copy from offsets 0, BLOCK_SIZE, 2*BLOCK_SIZE, 3*BLOCK_SIZE, etc.
+        fseek(ifp, offset, SEEK_SET);
+    
+        // Read BLOCK_SIZE number of bytes from the input file and store them in our
+        // data array. 
+
+        // Find a free block.
+        block_index = findFreeBlock();
+
+        if (block_index == -1)
+        {
+            printf("insert: Can not find a free block.\n");
+            return;
+        }
+
+        int32_t bytes = fread(data_blocks[block_index], BLOCK_SIZE, 1, ifp);
+
+        // Save the block in the inode
+        int32_t inode_block = -1;
+
+       
+        inode_block = inode_ptr[inode_index].blocks[i++];
         
         inode_ptr[inode_index].blocks[inode_block] = block_index;
 
@@ -1662,7 +1810,7 @@ void encrypt(char *filename, char cipher)
     fclose(fpo);
 
     delete(filename);
-    insert(filename);
+    XOR_insert(filename);
 
     remove("temp");
 }
@@ -1730,7 +1878,7 @@ void decrypt(char *filename, char cipher)
     fclose(fpo);
 
     delete(filename);
-    insert(filename);
+    XOR_insert(filename);
 
     remove("temp");
 }
