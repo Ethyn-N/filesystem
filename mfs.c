@@ -463,6 +463,54 @@ int main()
             retrieve(token[1], token[2]);
         }
 
+        // If "encrypt" command is invoked.
+        else if (strcmp("encrypt", token[0]) == 0)
+        {
+            if (image_open == 0)
+            {
+                printf("encrypt: Disk image is not open.\n");
+                continue;
+            }
+
+            if (token[1] == NULL)
+            {
+                printf("encrypt: No filename specified.\n");
+                continue;
+            }
+
+            if (token[2] == NULL)
+            {
+                printf("encrypt: No cipher specified.\n");
+                continue;
+            }
+
+            encrypt(token[1], token[2]);
+        }
+
+        // If "decrypt" command is invoked.
+        else if (strcmp("decrypt", token[0]) == 0)
+        {
+            if (image_open == 0)
+            {
+                printf("decrypt: Disk image is not open.\n");
+                continue;
+            }
+
+            if (token[1] == NULL)
+            {
+                printf("decrypt: No filename specified.\n");
+                continue;
+            }
+
+            if (token[2] == NULL)
+            {
+                printf("decrypt: No cipher specified.\n");
+                continue;
+            }
+
+            decrypt(token[1], token[2]);
+        }
+
         // Fork calls for UNIX commands.
         else
         {
@@ -633,7 +681,7 @@ int32_t findFreeBlock()
         if (free_blocks[i])
         {
             // free_blocks[i + 790] = 0;
-            free_blocks[i] = 0;
+            free_blocks[i + 1001] = 0;
             return i + 1001; //790 1001 1065
         }
     }
@@ -1044,17 +1092,22 @@ void insert(char *filename)
     }
 
     // Find an empty directory entry
-    int directory_entry = -1;
+    int directory_entry = searchDirectory(filename);
+    int rewrite = 1;
 
-    for (int i = 0; i < NUM_FILES; i++)
+    if (directory_entry == -1)
     {
-        if (directory_ptr[i].in_use == 0)
+        rewrite = 0;
+        for (int i = 0; i < NUM_FILES; i++)
         {
-            directory_entry = i;
-            break;
+            if (directory_ptr[i].in_use == 0)
+            {
+                directory_entry = i;
+                break;
+            }
         }
     }
-
+    
     if (directory_entry == -1)
     {
         printf("insert: Could not find a free directory entry.\n");
@@ -1081,7 +1134,17 @@ void insert(char *filename)
     int32_t block_index = -1;
 
     // Find a free inode.
-    int32_t inode_index = findFreeInode();
+    int32_t inode_index = -1;
+
+    if (rewrite == 1)
+    {
+        inode_index = directory_ptr[directory_entry].inode;
+    }
+    else
+    {
+        inode_index = findFreeInode();
+    }
+
     if (inode_index == -1)
     {
         printf("insert: Can not find a free inode.\n");
@@ -1099,6 +1162,8 @@ void insert(char *filename)
     inode_ptr[inode_index].date = time(NULL);
     inode_ptr[inode_index].attribute &= ~HIDDEN;
     inode_ptr[inode_index].attribute &= ~READONLY;
+
+    int i = 0;
  
     // copy_size is initialized to the size of the input file so each loop iteration we
     // will copy BLOCK_SIZE bytes from the file then reduce our copy_size counter by
@@ -1116,6 +1181,16 @@ void insert(char *filename)
         // data array. 
 
         // Find a free block.
+
+        // if (rewrite == 1)
+        // {
+        //     block_index = inode_ptr[inode_index].blocks[i++];
+        // }
+        // else
+        // {
+        //     block_index = findFreeBlock();
+        // }
+
         block_index = findFreeBlock();
 
         if (block_index == -1)
@@ -1127,7 +1202,17 @@ void insert(char *filename)
         int32_t bytes = fread(data_blocks[block_index], BLOCK_SIZE, 1, ifp);
 
         // Save the block in the inode
-        int32_t inode_block = findFreeInodeBlock(inode_index);
+        int32_t inode_block = -1;
+
+        if (rewrite == 1)
+        {
+            inode_block = inode_ptr[inode_index].blocks[i++];
+        }
+        else
+        {
+            inode_block = findFreeInodeBlock(inode_index);
+        }
+        
         inode_ptr[inode_index].blocks[inode_block] = block_index;
 
         // If bytes == 0 and we haven't reached the end of the file then something is 
@@ -1149,7 +1234,7 @@ void insert(char *filename)
         // the fseek at the top of the loop to position us to the correct spot.
         offset += BLOCK_SIZE;
 
-        block_index = findFreeBlock();
+        // block_index = findFreeBlock();
     }
 
     // We are done copying from the input file so close it out.
@@ -1495,4 +1580,126 @@ void readFileRetrieve(char *filename, int directory_entry)
 
     // Close the output file, we're done. 
     fclose(ofp);
+}
+
+void encrypt(char *filename, char *cipher)
+{
+    // Verify the filename isn't NULL.
+    if (filename == NULL)
+    {
+        printf("encrypt: Filename is NULL\n");
+        return;
+    }
+
+    // Verify file is in directory
+    int directory_entry = searchDirectory(filename);
+	if (directory_entry == -1)
+	{	
+		printf("encrypt: File not found in directory.\n");
+        return;
+	}
+    if (directory_ptr[directory_entry].in_use == 0)
+    {
+        printf("encrypt: File not found in directory.\n");
+        return;
+    }
+
+    readFileRetrieve(filename, directory_entry);
+
+    FILE *fpi = fopen("temp", "rb"); 
+    if (fpi == NULL) 
+    { 
+        printf("encrypt: Can not open file.\n");
+        return;
+    }
+
+    FILE *fpo = fopen(filename, "wb"); 
+    if (fpo == NULL) 
+    { 
+        printf("encrypt: Can not open file.\n");
+        return;
+    }
+
+    int block_size = strlen(cipher);
+	unsigned char block[block_size];
+    int num_bytes;
+
+    do {
+		num_bytes = fread(block, 1, block_size, fpi);
+
+		// XOR byte by byte
+		for (int i = 0; i < num_bytes; i++) 
+			block[i] ^= cipher[i];
+
+		fwrite(block, 1, num_bytes, fpo);
+	} while (num_bytes == block_size);
+
+    fclose(fpi);
+    fclose(fpo);
+
+    delete(filename);
+    insert(filename);
+
+    remove("temp");
+}
+
+void decrypt(char *filename, char *cipher)
+{
+    // Verify the filename isn't NULL.
+    if (filename == NULL)
+    {
+        printf("decrypt: Filename is NULL\n");
+        return;
+    }
+
+    // Verify file is in directory
+    int directory_entry = searchDirectory(filename);
+	if (directory_entry == -1)
+	{	
+		printf("decrypt: File not found in directory.\n");
+        return;
+	}
+    if (directory_ptr[directory_entry].in_use == 0)
+    {
+        printf("decrypt: File not found in directory.\n");
+        return;
+    }
+
+    readFileRetrieve(filename, directory_entry);
+
+    FILE *fpi = fopen("temp", "rb"); 
+    if (fpi == NULL) 
+    { 
+        printf("decrypt: Can not open file.\n");
+        return;
+    }
+
+    FILE *fpo = fopen(filename, "wb"); 
+    if (fpo == NULL) 
+    { 
+        printf("decrypt: Can not open file.\n");
+        return;
+    }
+
+    int block_size = strlen(cipher);
+	unsigned char block[block_size];
+    int num_bytes;
+
+    do {
+		num_bytes = fread(block, 1, block_size, fpi);
+
+		// XOR byte by byte
+		for (int i = 0; i < num_bytes; i++) 
+			block[i] ^= cipher[i];
+
+		fwrite(block, 1, num_bytes, fpo);
+	} while (num_bytes == block_size);
+
+    fclose(fpi);
+    fclose(fpo);
+
+    delete(filename);
+    insert(filename);
+
+    remove("temp");
 }
