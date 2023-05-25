@@ -1,6 +1,4 @@
-[![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-24ddc0f5d75046c5622901739e7c5dd533143b0c8e959d652212380cedb1ea36.svg)](https://classroom.github.com/a/L639-hu8)
-[![Open in Codespaces](https://classroom.github.com/assets/launch-codespace-7f7980b617ed060a017424585567c406b6ee15c891e84e1186181d67ecf80aa0.svg)](https://classroom.github.com/open-in-codespaces?assignment_repo_id=10956586)
-# Filesystem
+# Description
 
 In this assignment you will write a user space portable index-allocated file system. Your program will provide the user with 2<sup>26</sup> bytes of drive space in a disk image. Users will have the ability to create the filesystem image, list the files currently in the file system, add files, remove files, and save the filesystem. Files will persist in the file system image when the program exits.
 
@@ -179,34 +177,3 @@ The command shall take the form:
 ```decrypt <filename> <cipher>```
 
 The cipher is required to be 256 bits.
-
-## Nonfunctional Requirements
-1. You may code your solution in C or C++.
-2. C files shall end in .c . C++ files shall end in .cpp
-3. Your source files must be ASCII text files. No binary submissions will be accepted.
-4. Tabs or spaces shall be used to indent the code. Your code must use one or the other. All indentation must be consistent.
-5. No line of code shall exceed 100 characters.
-6. Each source code file shall have the following header filled out:
-7. All code must be well commented. This means descriptive comments that tell the intent of the code, not just what the code is executing. 
-8. Keep your curly brace placement consistent. If you place curly braces on a new line , always place curly braces on a new end. Don’t mix end line brace placement with new line brace placement.
-9. Each function should have a header that describes its name, any parameters expected, any return values, as well as a description of what the function does. 
-10. If your solution uses multiple source files you must also submit a cmake file or a makefile. Submissions without a cmake file or makefile will have a 20 pt deduction.
-
-## Grading
-This assignment will be graded on the GitHub codespace. The assignment will be graded out of 100 points. 
-
-**There is no quiz.**
-
-Your C code will be compiled with:
-
-```gcc -Wall -Werror --std=c99 <filename>```
-
-Your C++ code will be compiled with:
-
-```g++ -Wall -Werror <filename>```
-
-Compiler warnings are there to tell you something is not correct. Pay attention to them and you will save yourself a lot of late nights debugging code. Code
-that does not compile will earn 0. This assignment must be 100% your group's own work. No code may be copied from friends, previous students, books, web pages, etc. All code submitted is checked against a database of previous semester’s graded assignments, current student’s code and common web sources. Code that is copied from an external source will result in a 0 for the assignment and referral to the Office of Student Conduct.
-
-## Hints and Suggestions
-Reuse the code from the mav shell. Your parser and main loop logic are already done. It will allow you to concentrate on the new functionality you have to implement and not on reimplementing code you’ve already written.
